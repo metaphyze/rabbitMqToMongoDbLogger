@@ -121,7 +121,7 @@ func main() {
 			if err != nil {
 				log.Printf("Failed to insert event (%+v) into MongoDB: %s", event, err)
 			} else {
-				//log.Printf("Event saved: %+v", event)
+				log.Printf("Event saved: %+v", event)
 			}
 		}
 	}()
