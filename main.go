@@ -57,7 +57,7 @@ func main() {
 	rabbitMQHost := os.Getenv("RABBITMQ_HOST")
 	mongoDBHost := os.Getenv("MONGODB_HOST")
 	// Connect to RabbitMQ
-	conn, err := amqp.Dial(fmt.Sprintf("amqp://guest:guest@%v:5672/", rabbitMQHost))
+	conn, err := amqp.Dial(fmt.Sprintf("amqp://%v:5672/", rabbitMQHost))
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
