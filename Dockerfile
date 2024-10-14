@@ -12,6 +12,8 @@ RUN go mod tidy && go build -o rabbitMqToMongoDbLogger main.go
 
 ENV RABBITMQ_HOST=localhost
 ENV MONGODB_HOST=localhost
+ENV MONGODB_USERNAME=bugs
+ENV MONGODB_PASSWORD=bunny
 
 # Run the server (can override port with env variable)
 CMD ["./rabbitMqToMongoDbLogger"]

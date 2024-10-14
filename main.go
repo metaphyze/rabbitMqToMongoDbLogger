@@ -56,8 +56,11 @@ func convertToMilliseconds(timestamp string) int64 {
 func main() {
 	rabbitMQHost := os.Getenv("RABBITMQ_HOST")
 	mongoDBHost := os.Getenv("MONGODB_HOST")
+	mongoDBUserName := os.Getenv("MONGODB_USERNAME")
+	mongoDBPassword := os.Getenv("MONGODB_PASSWORD")
+
 	// Connect to RabbitMQ
-	conn, err := amqp.Dial(fmt.Sprintf("amqp://%v:5672/", rabbitMQHost))
+	conn, err := amqp.Dial(fmt.Sprintf("amqp://%v:%v@%v:5672/", mongoDBUserName, mongoDBPassword, rabbitMQHost))
 	failOnError(err, "Failed to connect to RabbitMQ")
 	defer conn.Close()
 
