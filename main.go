@@ -23,6 +23,21 @@ type Event struct {
 	IpAddress   string `json:"ip_address"`
 }
 
+type LogEvent struct {
+	Username       string  `json:"username"`
+	Problem        string  `json:"problem"`
+	ID             string  `json:"id"`
+	Server         string  `json:"server"`
+	RequestNum     uint64  `json:"request_num"`
+	StartTime      string  `json:"start_time"`
+	StartTimeMs    int64   `json:"start_time_ms"`
+	DurationMs     int64   `json:"duration_ms"`
+	Success        bool    `json:"success"`
+	Error          string  `json:"error"`
+	Answer         float64 `json:"answer"`
+	HTTPReturnCode int     `json:"http_return_code"`
+}
+
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
@@ -69,8 +84,8 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	// Declare queue
-	q, err := ch.QueueDeclare(
+	// Declare queues
+	userEventsQueue, err := ch.QueueDeclare(
 		"user_events", // name
 		true,          // durable
 		false,         // delete when unused
@@ -78,31 +93,54 @@ func main() {
 		false,         // no-wait
 		nil,           // arguments
 	)
-	failOnError(err, "Failed to declare a queue")
+	failOnError(err, "Failed to declare user_events queue")
+
+	calculationEventsQueue, err := ch.QueueDeclare(
+		"calculation_events", // name
+		true,                 // durable
+		false,                // delete when unused
+		false,                // exclusive
+		false,                // no-wait
+		nil,                  // arguments
+	)
+	failOnError(err, "Failed to declare calculation_events queue")
 
 	// Connect to MongoDB
 	collectionUserEvents := connectToMongo(mongoDBHost, "user_events", "events")
+	collectionCalculationEvents := connectToMongo(mongoDBHost, "calculation_events", "events")
 
-	// Consume messages from RabbitMQ
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+	// Consume messages from user_events queue
+	userEventsMsgs, err := ch.Consume(
+		userEventsQueue.Name, // queue
+		"",                   // consumer
+		true,                 // auto-ack
+		false,                // exclusive
+		false,                // no-local
+		false,                // no-wait
+		nil,                  // args
 	)
-	failOnError(err, "Failed to register a consumer")
+	failOnError(err, "Failed to register a consumer for user_events")
+
+	// Consume messages from calculation_events queue
+	calculationEventsMsgs, err := ch.Consume(
+		calculationEventsQueue.Name, // queue
+		"",                          // consumer
+		true,                        // auto-ack
+		false,                       // exclusive
+		false,                       // no-local
+		false,                       // no-wait
+		nil,                         // args
+	)
+	failOnError(err, "Failed to register a consumer for calculation_events")
 
 	forever := make(chan bool)
 
 	go func() {
-		for d := range msgs {
+		for d := range userEventsMsgs {
 			var event Event
 			err := json.Unmarshal(d.Body, &event)
 			if err != nil {
-				log.Printf("Failed to unmarshal message: %s", err)
+				log.Printf("Failed to unmarshal message from user_events: %s", err)
 				continue
 			}
 
@@ -119,9 +157,41 @@ func main() {
 				"ip_address":   event.IpAddress,
 			})
 			if err != nil {
-				log.Printf("Failed to insert event (%+v) into MongoDB: %s", event, err)
+				log.Printf("Failed to insert user event (%+v) into MongoDB: %s", event, err)
 			} else {
-				log.Printf("Event saved: %+v", event)
+				log.Printf("User event saved: %+v", event)
+			}
+		}
+	}()
+
+	go func() {
+		for d := range calculationEventsMsgs {
+			var logEvent LogEvent
+			err := json.Unmarshal(d.Body, &logEvent)
+			if err != nil {
+				log.Printf("Failed to unmarshal message from calculation_events: %s", err)
+				continue
+			}
+
+			// Save logEvent to MongoDB
+			_, err = collectionCalculationEvents.InsertOne(context.TODO(), bson.M{
+				"username":         logEvent.Username,
+				"problem":          logEvent.Problem,
+				"id":               logEvent.ID,
+				"server":           logEvent.Server,
+				"request_num":      logEvent.RequestNum,
+				"start_time":       logEvent.StartTime,
+				"start_time_ms":    logEvent.StartTimeMs,
+				"duration_ms":      logEvent.DurationMs,
+				"success":          logEvent.Success,
+				"error":            logEvent.Error,
+				"answer":           logEvent.Answer,
+				"http_return_code": logEvent.HTTPReturnCode,
+			})
+			if err != nil {
+				log.Printf("Failed to insert calculation event (%+v) into MongoDB: %s", logEvent, err)
+			} else {
+				log.Printf("Calculation event saved: %+v", logEvent)
 			}
 		}
 	}()
