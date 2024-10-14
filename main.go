@@ -29,7 +29,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func connectToMongo(mongoHost string) *mongo.Collection {
+func connectToMongo(mongoHost string, databaseName string, collectionName string) *mongo.Collection {
 	// MongoDB connection
 	clientOptions := options.Client().ApplyURI(fmt.Sprintf("mongodb://%v:27017", mongoHost))
 	client, err := mongo.Connect(context.TODO(), clientOptions)
@@ -40,7 +40,7 @@ func connectToMongo(mongoHost string) *mongo.Collection {
 	failOnError(err, "Failed to ping MongoDB")
 
 	fmt.Println("Connected to MongoDB")
-	collection := client.Database("user_events").Collection("events")
+	collection := client.Database(databaseName).Collection(collectionName)
 	return collection
 }
 
@@ -81,7 +81,7 @@ func main() {
 	failOnError(err, "Failed to declare a queue")
 
 	// Connect to MongoDB
-	collection := connectToMongo(mongoDBHost)
+	collectionUserEvents := connectToMongo(mongoDBHost, "user_events", "events")
 
 	// Consume messages from RabbitMQ
 	msgs, err := ch.Consume(
@@ -110,7 +110,7 @@ func main() {
 			event.TimestampMs = convertToMilliseconds(event.Timestamp)
 
 			// Save event to MongoDB
-			_, err = collection.InsertOne(context.TODO(), bson.M{
+			_, err = collectionUserEvents.InsertOne(context.TODO(), bson.M{
 				"username":     event.Username,
 				"event_type":   event.EventType,
 				"timestamp":    event.Timestamp,
